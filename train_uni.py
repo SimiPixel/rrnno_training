@@ -171,7 +171,7 @@ def main(
                 rootincl=True,
                 X_transform=natural_units_X_trafo,
             )
-            add_callback(cb, sys, twice=True)
+            add_callback(cb, sys)
 
     # 2 Seg with flexible IMUs callbacks
     axes = {
