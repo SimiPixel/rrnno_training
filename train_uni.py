@@ -149,29 +149,29 @@ def main(
                     metrices_name.append([cb.metric_identifier, "mae_deg", segment])
 
     # standard experimental callbacks
-    for phase in ["slow1", "fast"]:
-        for sys in [
-            ml.convenient.load_2Seg3Seg4Seg_system(
-                anchor_2Seg="seg2", delete_inner_imus=True
-            ),
-            ml.convenient.load_2Seg3Seg4Seg_system(
-                anchor_3Seg="seg2", delete_inner_imus=True
-            ),
-            ml.convenient.load_2Seg3Seg4Seg_system(
-                anchor_4Seg="seg5", delete_inner_imus=True
-            ),
-        ]:
+    timings = ["slow_fast_mix", "slow_fast_freeze_mix"]
+    for phase in timings:
+        for sys, ja in zip(
+            [
+                ml.convenient.load_2Seg3Seg4Seg_system(
+                    anchor_3Seg="seg2", delete_inner_imus=True
+                ),
+                ml.convenient.load_2Seg3Seg4Seg_system(
+                    anchor_4Seg="seg5", delete_inner_imus=True
+                ),
+            ],
+            [False, True],
+        ):
             cb = ml.convenient.build_experimental_validation_callback2(
                 rnno_fn,
                 sys,
-                "S_06",
+                "S_07",
                 phase,
-                jointaxes=True,
-                flex=False,
+                jointaxes=ja,
                 rootincl=True,
                 X_transform=natural_units_X_trafo,
             )
-            add_callback(cb, sys, len(sys.findall_segments()) == 4, twice=True)
+            add_callback(cb, sys, twice=True)
 
     # 2 Seg with flexible IMUs callbacks
     axes = {
@@ -188,31 +188,13 @@ def main(
             .change_link_name("tibia", tib)
         )
 
-    for phase in ["slow1", "fast"]:
+    for phase in timings:
         for axis in axes:
             sys = load_sys_flexible(*axes[axis], suffix=axis)
             cb = ml.convenient.build_experimental_validation_callback2(
                 rnno_fn,
                 sys,
-                "S_06",
-                phase,
-                jointaxes=True,
-                flex=True,
-                rootincl=True,
-                X_transform=natural_units_X_trafo,
-            )
-            add_callback(cb, sys)
-
-    # S16; gait_slow; both left & right
-    sides = {"left": ("seg1", "seg4"), "right": ("seg2", "seg3")}
-
-    for phase in ["gait_slow", "gait_fast"]:
-        for side in sides:
-            sys = load_sys_flexible(*sides[side], suffix=side)
-            cb = ml.convenient.build_experimental_validation_callback2(
-                rnno_fn,
-                sys,
-                "S_16",
+                "S_07",
                 phase,
                 jointaxes=True,
                 flex=True,
