@@ -238,7 +238,11 @@ def main(
     ]
 
     optimizer = ml.make_optimizer(
-        lr, episodes, n_steps_per_episode=6, skip_large_update_max_normsq=100.0
+        lr,
+        episodes,
+        n_steps_per_episode=6,
+        skip_large_update_max_normsq=100.0,
+        cos_decay_twice=two_days,
     )
 
     callback_kill_after_seconds = 23.75 * 3600
