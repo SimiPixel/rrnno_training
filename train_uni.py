@@ -196,20 +196,22 @@ def main(
             .change_link_name("tibia", tib)
         )
 
-    for phase in timings:
-        for axis in axes:
-            sys = load_sys_flexible(*axes[axis], suffix=axis)
-            cb = ml.convenient.build_experimental_validation_callback2(
-                rnno_fn,
-                sys,
-                "S_07",
-                phase,
-                jointaxes=True,
-                flex=True,
-                rootincl=True,
-                X_transform=natural_units_X_trafo,
-            )
-            add_callback(cb, sys)
+    timings.pop("S_06")
+    for exp_id in timings:
+        for phase in timings[exp_id]:
+            for axis in axes:
+                sys = load_sys_flexible(*axes[axis], suffix=axis)
+                cb = ml.convenient.build_experimental_validation_callback2(
+                    rnno_fn,
+                    sys,
+                    exp_id,
+                    phase,
+                    jointaxes=True,
+                    flex=True,
+                    rootincl=True,
+                    X_transform=natural_units_X_trafo,
+                )
+                add_callback(cb, sys)
 
     del sys
 
