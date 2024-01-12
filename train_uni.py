@@ -149,29 +149,33 @@ def main(
                     metrices_name.append([cb.metric_identifier, "mae_deg", segment])
 
     # standard experimental callbacks
-    timings = ["slow_fast_mix", "slow_fast_freeze_mix"]
-    for phase in timings:
-        for sys, ja in zip(
-            [
-                ml.convenient.load_2Seg3Seg4Seg_system(
-                    anchor_3Seg="seg2", delete_inner_imus=True
-                ),
-                ml.convenient.load_2Seg3Seg4Seg_system(
-                    anchor_4Seg="seg5", delete_inner_imus=True
-                ),
-            ],
-            [False, True],
-        ):
-            cb = ml.convenient.build_experimental_validation_callback2(
-                rnno_fn,
-                sys,
-                "S_07",
-                phase,
-                jointaxes=ja,
-                rootincl=True,
-                X_transform=natural_units_X_trafo,
-            )
-            add_callback(cb, sys)
+    timings = {
+        "S_06": ["slow1", "fast"],
+        "S_07": ["slow_fast_mix", "slow_fast_freeze_mix"],
+    }
+    for exp_id in timings:
+        for phase in timings[exp_id]:
+            for sys, ja in zip(
+                [
+                    ml.convenient.load_2Seg3Seg4Seg_system(
+                        anchor_3Seg="seg2", delete_inner_imus=True
+                    ),
+                    ml.convenient.load_2Seg3Seg4Seg_system(
+                        anchor_4Seg="seg5", delete_inner_imus=True
+                    ),
+                ],
+                [False, True],
+            ):
+                cb = ml.convenient.build_experimental_validation_callback2(
+                    rnno_fn,
+                    sys,
+                    exp_id,
+                    phase,
+                    jointaxes=ja,
+                    rootincl=True,
+                    X_transform=natural_units_X_trafo,
+                )
+                add_callback(cb, sys)
 
     # 2 Seg with flexible IMUs callbacks
     axes = {
