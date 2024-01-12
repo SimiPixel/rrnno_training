@@ -123,7 +123,6 @@ def main(
     seed: int = 1,
     kill_ep: Optional[int] = None,
     ja_aug: bool = False,
-    two_days: bool = False,
 ):
     assert tp is not None
 
@@ -135,6 +134,10 @@ def main(
 
     if use_wandb:
         wandb.init(project=wandb_project, name=wandb_name, config=locals())
+
+    two_days = False
+    if episodes > 5000:
+        two_days = True
 
     rnno_fn = _make_rnno_fn(
         hidden_state_dim, stack_rnn, layernorm, stop_grads=False, lstm=lstm
