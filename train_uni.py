@@ -123,6 +123,7 @@ def main(
     seed: int = 1,
     kill_ep: Optional[int] = None,
     ja_aug: bool = False,
+    two_days: bool = False,
 ):
     assert tp is not None
 
@@ -240,13 +241,17 @@ def main(
         lr, episodes, n_steps_per_episode=6, skip_large_update_max_normsq=100.0
     )
 
+    callback_kill_after_seconds = 23.75 * 3600
+    if two_days:
+        callback_kill_after_seconds *= 2
+
     ml.train(
         generator,
         episodes,
         network,
         optimizer=optimizer,
         callbacks=callbacks,
-        callback_kill_after_seconds=23.75 * 3600,
+        callback_kill_after_seconds=callback_kill_after_seconds,
         callback_kill_if_nan=True,
         callback_kill_if_grads_larger=1e32,
         callback_save_params=f"~/params/{ml.unique_id()}.pickle",
