@@ -261,7 +261,9 @@ def main(
         callback_save_params_track_metrices=[["exp_val_mae_deg"]],
         initial_params=None if warmstart is None else f"~/params/0x{warmstart}.pickle",
         key_network=jax.random.PRNGKey(seed),
-        checkpoint=f"~/.xxy_checkpoints/0x{checkpoint}.pickle",
+        checkpoint=None
+        if checkpoint is None
+        else f"~/.xxy_checkpoints/0x{checkpoint}.pickle",
     )
 
 
