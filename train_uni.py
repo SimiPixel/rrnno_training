@@ -123,6 +123,7 @@ def main(
     seed: int = 1,
     kill_ep: Optional[int] = None,
     ja_aug: bool = False,
+    checkpoint: str = None,
 ):
     assert tp is not None
 
@@ -134,10 +135,6 @@ def main(
 
     if use_wandb:
         wandb.init(project=wandb_project, name=wandb_name, config=locals())
-
-    two_days = False
-    if episodes > 5000:
-        two_days = True
 
     rnno_fn = _make_rnno_fn(
         hidden_state_dim, stack_rnn, layernorm, stop_grads=False, lstm=lstm
@@ -247,12 +244,8 @@ def main(
         episodes,
         n_steps_per_episode=6,
         skip_large_update_max_normsq=100.0,
-        cos_decay_twice=two_days,
+        cos_decay_twice=(episodes > 5000),
     )
-
-    callback_kill_after_seconds = 23.75 * 3600
-    if two_days:
-        callback_kill_after_seconds *= 2
 
     ml.train(
         generator,
@@ -260,7 +253,7 @@ def main(
         network,
         optimizer=optimizer,
         callbacks=callbacks,
-        callback_kill_after_seconds=callback_kill_after_seconds,
+        callback_kill_after_seconds=23.5 * 3600,
         callback_kill_if_nan=True,
         callback_kill_if_grads_larger=1e32,
         callback_save_params=f"~/params/{ml.unique_id()}.pickle",
@@ -268,6 +261,7 @@ def main(
         callback_save_params_track_metrices=[["exp_val_mae_deg"]],
         initial_params=None if warmstart is None else f"~/params/0x{warmstart}.pickle",
         key_network=jax.random.PRNGKey(seed),
+        checkpoint=f"~/.xxy_checkpoints/0x{checkpoint}.pickle",
     )
 
 
