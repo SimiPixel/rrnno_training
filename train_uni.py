@@ -208,18 +208,19 @@ def main(
     exp_id = "S_07"
     for phase in timings[exp_id]:
         for axis in axes:
-            sys = load_sys_flexible(*axes[axis], suffix=axis)
-            cb = ml.convenient.build_experimental_validation_callback2(
-                rnno_fn,
-                sys,
-                exp_id,
-                phase,
-                jointaxes=True,
-                flex=True,
-                rootincl=True,
-                X_transform=natural_units_X_trafo,
-            )
-            add_callback(cb, sys)
+            for ja in [False, True]:
+                sys = load_sys_flexible(*axes[axis], suffix=axis)
+                cb = ml.convenient.build_experimental_validation_callback2(
+                    rnno_fn,
+                    sys,
+                    exp_id,
+                    phase,
+                    jointaxes=ja,
+                    flex=True,
+                    rootincl=True,
+                    X_transform=natural_units_X_trafo,
+                )
+                add_callback(cb, sys)
 
     del sys
 
