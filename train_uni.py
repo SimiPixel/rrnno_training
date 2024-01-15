@@ -105,6 +105,9 @@ def _make_rnno_fn(
     return rnno_fn
 
 
+THREE_SEG_CBS = False
+
+
 def main(
     bs: int,
     episodes: int,
@@ -151,7 +154,7 @@ def main(
 
     # 4SEG exp callbacks
     timings = {
-        "S_06": ["slow1"],
+        "S_06": ["slow1", "fast"],
         "S_07": ["slow_fast_mix", "slow_fast_freeze_mix"],
     }
     sys = ml.convenient.load_2Seg3Seg4Seg_system(
@@ -159,7 +162,7 @@ def main(
     )
     for exp_id in timings:
         for phase in timings[exp_id]:
-            for flex in [False, True]:
+            for flex in [False]:
                 cb = ml.convenient.build_experimental_validation_callback2(
                     rnno_fn,
                     sys,
@@ -170,25 +173,26 @@ def main(
                     flex=flex,
                     X_transform=natural_units_X_trafo,
                 )
-                add_callback(cb, sys)
+                add_callback(cb, sys, twice=True)
 
-    # 3SEG exp callbacks
-    sys = ml.convenient.load_2Seg3Seg4Seg_system(
-        anchor_3Seg="seg2", delete_inner_imus=True
-    )
-    exp_id = "S_07"
-    for phase in timings[exp_id]:
-        cb = ml.convenient.build_experimental_validation_callback2(
-            rnno_fn,
-            sys,
-            exp_id,
-            phase,
-            jointaxes=False,
-            rootincl=True,
-            flex=False,
-            X_transform=natural_units_X_trafo,
+    if THREE_SEG_CBS:
+        # 3SEG exp callbacks
+        sys = ml.convenient.load_2Seg3Seg4Seg_system(
+            anchor_3Seg="seg2", delete_inner_imus=True
         )
-        add_callback(cb, sys)
+        exp_id = "S_07"
+        for phase in timings[exp_id]:
+            cb = ml.convenient.build_experimental_validation_callback2(
+                rnno_fn,
+                sys,
+                exp_id,
+                phase,
+                jointaxes=False,
+                rootincl=True,
+                flex=False,
+                X_transform=natural_units_X_trafo,
+            )
+            add_callback(cb, sys)
 
     # 2 Seg with flexible IMUs callbacks
     axes = {
@@ -205,22 +209,22 @@ def main(
             .change_link_name("tibia", tib)
         )
 
-    exp_id = "S_07"
-    for phase in timings[exp_id]:
-        for axis in axes:
-            for ja in [False, True]:
-                sys = load_sys_flexible(*axes[axis], suffix=axis)
-                cb = ml.convenient.build_experimental_validation_callback2(
-                    rnno_fn,
-                    sys,
-                    exp_id,
-                    phase,
-                    jointaxes=ja,
-                    flex=True,
-                    rootincl=True,
-                    X_transform=natural_units_X_trafo,
-                )
-                add_callback(cb, sys)
+    for exp_id in timings:
+        for phase in timings[exp_id]:
+            for axis in axes:
+                for ja in [True]:
+                    sys = load_sys_flexible(*axes[axis], suffix=axis)
+                    cb = ml.convenient.build_experimental_validation_callback2(
+                        rnno_fn,
+                        sys,
+                        exp_id,
+                        phase,
+                        jointaxes=ja,
+                        flex=True,
+                        rootincl=True,
+                        X_transform=natural_units_X_trafo,
+                    )
+                    add_callback(cb, sys)
 
     del sys
 
