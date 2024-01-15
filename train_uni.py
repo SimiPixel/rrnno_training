@@ -195,10 +195,15 @@ def main(
             add_callback(cb, sys)
 
     # 2 Seg with flexible IMUs callbacks
-    axes = {
+    axes_S_06_07 = {
         "xaxis": ("seg5", "seg2"),
         "yaxis": ("seg2", "seg3"),
         "zaxis": ("seg3", "seg4"),
+    }
+    axes = {
+        "S_06": axes_S_06_07,
+        "S_07": axes_S_06_07,
+        "S_16": {"left": ("seg1", "seg4"), "right": ("seg2", "seg3")},
     }
 
     def load_sys_flexible(fem, tib, suffix):
@@ -209,9 +214,10 @@ def main(
             .change_link_name("tibia", tib)
         )
 
+    timings.update(dict(S_16=["gait_slow", "gait_fast"]))
     for exp_id in timings:
         for phase in timings[exp_id]:
-            for axis in axes:
+            for axis in axes[exp_id]:
                 for ja in [True]:
                     sys = load_sys_flexible(*axes[axis], suffix=axis)
                     cb = ml.convenient.build_experimental_validation_callback2(
