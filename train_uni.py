@@ -219,7 +219,7 @@ def main(
         for phase in timings[exp_id]:
             for axis in axes[exp_id]:
                 for ja in [True]:
-                    sys = load_sys_flexible(*axes[axis], suffix=axis)
+                    sys = load_sys_flexible(*axes[exp_id][axis], suffix=axis)
                     cb = ml.convenient.build_experimental_validation_callback2(
                         rnno_fn,
                         sys,
