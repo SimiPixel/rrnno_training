@@ -14,6 +14,7 @@ def main(
     prob_rigid: float = 0.5,
     pos_min_max: float = 0.0,
     vault: bool = False,
+    all_rigid_or_flex: bool = False,
 ):
     ENV_VAR = "HPCVAULT" if vault else "WORK"
 
@@ -22,7 +23,7 @@ def main(
     filepath = root.joinpath(
         f"uni_{size}{reduce(lambda a,b: a+'_'+b, configs, '')}_"
         f"noisy_{int(not non)}_prob_rigid_{str(prob_rigid).replace('.', '')}"
-        f"pmm_{str(pos_min_max).replace('.', '')}"
+        f"pmm_{str(pos_min_max).replace('.', '')}_allRoF_{int(all_rigid_or_flex)}"
     )
 
     configs = [ml.convenient.load_config(name) for name in configs]
@@ -59,13 +60,15 @@ def main(
         dynamic_simulation=True,
         imu_motion_artifacts=True,
         imu_motion_artifacts_kwargs=dict(
-            prob_rigid=prob_rigid, pos_min_max=pos_min_max
+            prob_rigid=prob_rigid,
+            pos_min_max=pos_min_max,
+            all_imus_either_rigid_or_flex=all_rigid_or_flex,
         ),
         randomize_joint_params=True,
         randomize_motion_artifacts=True,
         randomize_positions=True,
-        eager=True,
-        ashdf5=filepath,
+        mode="hdf5",
+        hdf5_filepath=filepath,
         sizes=size,
         seed=1,
     )
