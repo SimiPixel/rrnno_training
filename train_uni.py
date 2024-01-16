@@ -14,6 +14,7 @@ from x_xy.subpkgs import sys_composer
 # 3Seg: seg2 - seg3 - seg4
 # 4Seg: seg5 - seg2 - seg3 - seg4
 dropout_rates1 = dict(
+    seg2_1Seg=(0.0, 1.0),
     seg2_2Seg=(0.0, 1.0),
     seg3_2Seg=(0.0, 0.5),
     seg2_3Seg=(0.0, 1.0),
@@ -152,12 +153,33 @@ def main(
                 for _ in range((2 if twice else 1)):
                     metrices_name.append([cb.metric_identifier, "mae_deg", segment])
 
+    # 1SEG exp callbacks
+    timings = {
+        "S_07": ["slow_fast_mix", "slow_fast_freeze_mix"],
+    }
+
+    for anchor_1Seg in ["seg1", "seg5", "seg2", "seg3", "seg4"]:
+        sys = ml.convenient.load_1Seg2Seg3Seg4Seg_system(
+            anchor_1Seg=anchor_1Seg
+        ).change_model_name(suffix=f"_{anchor_1Seg}")
+        for exp_id in timings:
+            for phase in timings[exp_id]:
+                cb = ml.convenient.build_experimental_validation_callback2(
+                    rnno_fn,
+                    sys,
+                    exp_id,
+                    phase,
+                    rootincl=True,
+                    X_transform=natural_units_X_trafo,
+                )
+                add_callback(cb, sys)
+
     # 4SEG exp callbacks
     timings = {
         "S_06": ["slow1", "fast"],
         "S_07": ["slow_fast_mix", "slow_fast_freeze_mix"],
     }
-    sys = ml.convenient.load_2Seg3Seg4Seg_system(
+    sys = ml.convenient.load_1Seg2Seg3Seg4Seg_system(
         anchor_4Seg="seg5", delete_inner_imus=True
     )
     for exp_id in timings:
@@ -177,7 +199,7 @@ def main(
 
     if THREE_SEG_CBS:
         # 3SEG exp callbacks
-        sys = ml.convenient.load_2Seg3Seg4Seg_system(
+        sys = ml.convenient.load_1Seg2Seg3Seg4Seg_system(
             anchor_3Seg="seg2", delete_inner_imus=True
         )
         exp_id = "S_07"
@@ -239,8 +261,8 @@ def main(
         print(zoom_in)
     callbacks += [ml.callbacks.AverageMetricesTLCB(metrices_name, "exp_val_mae_deg")]
 
-    sys = ml.convenient.load_2Seg3Seg4Seg_system(
-        "seg2", "seg2", "seg5", add_suffix_to_linknames=True
+    sys = ml.convenient.load_1Seg2Seg3Seg4Seg_system(
+        "seg2", "seg2", "seg2", "seg5", add_suffix_to_linknames=True
     )
     sys_noimu = sys_composer.make_sys_noimu(sys)[0]
     del sys

@@ -43,8 +43,8 @@ def main(
         for a3S in anchors_3Seg:
             for a4S in anchors_4Seg:
                 sys_data.append(
-                    ml.convenient.load_2Seg3Seg4Seg_system(
-                        a2S, a3S, a4S, True, add_suffix_to_linknames=True
+                    ml.convenient.load_1Seg2Seg3Seg4Seg_system(
+                        "seg2", a2S, a3S, a4S, True, add_suffix_to_linknames=True
                     )
                 )
 
@@ -63,6 +63,7 @@ def main(
             prob_rigid=prob_rigid,
             pos_min_max=pos_min_max,
             all_imus_either_rigid_or_flex=all_rigid_or_flex,
+            imus_surely_rigid=["imu2_1Seg"],
         ),
         randomize_joint_params=True,
         randomize_motion_artifacts=True,
