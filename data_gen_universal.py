@@ -3,8 +3,56 @@ import os
 from pathlib import Path
 
 import fire
+import jax
+import jax.numpy as jnp
 import x_xy
 from x_xy.subpkgs import ml
+
+
+def _l_idx_3Seg_last_seg(sys: x_xy.System) -> int:
+    lam = sys.link_parents
+
+    root_to_last_map = {"seg2_3Seg": "seg4_3Seg", "seg4_3Seg": "seg2_3Seg"}
+
+    to_root = []
+    for options in root_to_last_map:
+        if lam[sys.name_to_idx(options)] == -1:
+            to_root.append(options)
+
+    assert len(to_root) == 1
+    return sys.name_to_idx(root_to_last_map[to_root[0]])
+
+
+def setup_fn_2DOF_factory(prob: float | None):
+    if prob is None:
+        return None
+
+    def setup_fn_2DOF(key, sys: x_xy.System):
+        flip = jax.random.bernoulli(key, p=prob)
+
+        def collapse(sys: x_xy.System):
+            # print("collapse")
+            pos = sys.links.transform1.pos
+            new_pos = pos.at[_l_idx_3Seg_last_seg(sys)].set(jnp.zeros((3,)))
+            return sys.replace(
+                links=sys.links.replace(
+                    transform1=sys.links.transform1.replace(pos=new_pos)
+                )
+            )
+
+        return jax.lax.cond(flip, collapse, lambda sys: sys, sys)
+
+    return setup_fn_2DOF
+
+
+def finalize_fn_factory(prob: float | None):
+    def finalize_fn(key, q, x, sys):
+        X, y = {}, {}
+        pos_i = sys.links.transform1.pos[_l_idx_3Seg_last_seg(sys)]
+        X["2DOF"] = jnp.allclose(pos_i, jnp.zeros((3,)))
+        return X, y
+
+    return None if prob is None else finalize_fn
 
 
 def main(
@@ -15,6 +63,8 @@ def main(
     pos_min_max: float = 0.0,
     vault: bool = False,
     all_rigid_or_flex: bool = False,
+    prob_2DOF: float = None,
+    seed: int = 1,
 ):
     ENV_VAR = "HPCVAULT" if vault else "WORK"
 
@@ -24,6 +74,7 @@ def main(
         f"uni_{size}{reduce(lambda a,b: a+'_'+b, configs, '')}_"
         f"noisy_{int(not non)}_prob_rigid_{str(prob_rigid).replace('.', '')}"
         f"pmm_{str(pos_min_max).replace('.', '')}_allRoF_{int(all_rigid_or_flex)}"
+        f"_2DOF_{str(prob_2DOF).replace('.', '')}_seed_{seed}"
     )
 
     configs = [ml.convenient.load_config(name) for name in configs]
@@ -71,7 +122,10 @@ def main(
         mode="hdf5",
         hdf5_filepath=filepath,
         sizes=size,
-        seed=1,
+        seed=seed,
+        setup_fn=setup_fn_2DOF_factory(prob_2DOF),
+        finalize_fn=finalize_fn_factory(prob_2DOF),
+        jit=ml.on_cluster(),
     )
 
 
