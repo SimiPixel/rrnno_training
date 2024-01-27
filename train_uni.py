@@ -323,8 +323,11 @@ def main(
 
     if SADDLE_CBS:
         callbacks += [
-            SaddleCallback(rnno_fn, [0, 0, 1.0], [0, 1.0, 0]),
+            SaddleCallback(rnno_fn, [0, 0, -1.0], [0, 1.0, 0]),
             SaddleCallback(rnno_fn, [0, 0, 1.0], [0, 0, 0.0]),
+            SaddleCallback(rnno_fn, [0, 1, 0.0], [0, 0, 0.0]),
+            SaddleCallback(rnno_fn, [0, 0, 0], [0, 1, 0]),
+            SaddleCallback(rnno_fn, [0, 0, 0], [0, 0, -1]),
         ]
 
     # create one large "experimental validation" metric
