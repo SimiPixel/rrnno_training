@@ -4,11 +4,57 @@ from typing import Optional
 import fire
 import jax
 import numpy as np
+from tree_utils._tree_utils import PyTree
 import wandb
 import x_xy
 from x_xy.algorithms.generator import transforms
+from x_xy.subpkgs import benchmark
 from x_xy.subpkgs import ml
 from x_xy.subpkgs import sys_composer
+from x_xy.subpkgs.ml.ml_utils import Logger
+
+natural_units_X_trafo = ml.convenient.rescale_natural_units_X_transform
+
+
+class SaddleCallback(ml.callbacks.TrainingLoopCallback):
+    def __init__(self, rnno_fn, ja_i: list[float], ja_o) -> None:
+        filter = ml.InitApplyFnFilter(rnno_fn, X_transform=natural_units_X_trafo)
+        self.predict = jax.jit(
+            benchmark.saddle(
+                filter,
+                "S_13",
+                "slow_fast_freeze_mix",
+                None,
+                "right",
+                warmup=1000,
+                factory=True,
+                ja_inner=ja_i,
+                ja_outer=ja_o,
+            )
+        )
+
+        def to_str(eles: list[float]) -> str:
+            s = ""
+            for ele in eles:
+                s += str(int(ele))
+            return s
+
+        self.identifier = f"saddle_i_{to_str(ja_i)}_o_{to_str(ja_o)}"
+
+    def after_training_step(
+        self,
+        i_episode: int,
+        metrices: dict,
+        params: dict,
+        grads: list[dict],
+        sample_eval: dict,
+        loggers: list[Logger],
+        opt_state: PyTree,
+    ) -> None:
+        if (i_episode % 5) == 0:
+            self.last_metric = {self.identifier: self.predict(params)}
+        metrices.update(self.last_metric)
+
 
 # 2Seg: seg2 - seg3
 # 3Seg: seg2 - seg3 - seg4
@@ -50,22 +96,39 @@ dropout_rates3 = dict(
 dropout_configs = {1: dropout_rates1, 2: dropout_rates2, 3: dropout_rates3}
 
 
-natural_units_X_trafo = ml.convenient.rescale_natural_units_X_transform
-
-
 def output_transform_factory(dropout_rates, joint_axes_aug: bool):
     def output_transform(tree):
         X, y = tree
+        X = X.copy()
+        two_dof = X.pop("2DOF", None)
+        X.pop("pos", None)
         any_segment = X[list(X.keys())[0]]
         assert any_segment["gyr"].ndim == 3, f"{any_segment['gyr'].shape}"
         bs = any_segment["gyr"].shape[0]
 
+        draw = lambda p: np.random.binomial(1, p, size=bs).astype(float)[:, None, None]
+        fcs = {
+            "seg3_3Seg": draw(1 - dropout_rates["seg3_3Seg"][1]),
+            "seg4_3Seg": draw(1 - dropout_rates["seg4_3Seg"][1]),
+        }
+        if two_dof is not None:
+            set_to_one = np.logical_and(
+                np.logical_and(two_dof[:, None, None], fcs["seg3_3Seg"] == 0.0),
+                fcs["seg4_3Seg"] == 0,
+            )
+            fcs["seg3_3Seg"] = np.where(
+                set_to_one, np.ones((bs, 1, 1)), fcs["seg3_3Seg"]
+            )
+            fcs["seg4_3Seg"] = np.where(
+                set_to_one, np.ones((bs, 1, 1)), fcs["seg4_3Seg"]
+            )
+
         for segments, (imu_rate, jointaxes_rate) in dropout_rates.items():
-            draw = lambda p: np.random.binomial(1, p, size=bs).astype(float)[
-                :, None, None
-            ]
             factor_imu = draw(1 - imu_rate)
             factor_ja = draw(1 - jointaxes_rate)
+
+            if segments in fcs:
+                factor_ja = fcs[segments]
 
             for gyraccmag in ["gyr", "acc", "mag"]:
                 if gyraccmag in X[segments]:
@@ -107,6 +170,7 @@ def _make_rnno_fn(
 
 
 THREE_SEG_CBS = False
+SADDLE_CBS = True
 
 
 def main(
@@ -256,6 +320,12 @@ def main(
                     add_callback(cb, sys)
 
     del sys
+
+    if SADDLE_CBS:
+        callbacks += [
+            SaddleCallback(rnno_fn, [0, 0, 1.0], [0, 1.0, 0]),
+            SaddleCallback(rnno_fn, [0, 0, 1.0], [0, 0, 0.0]),
+        ]
 
     # create one large "experimental validation" metric
     for zoom_in in metrices_name:
