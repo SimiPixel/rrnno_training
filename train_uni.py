@@ -112,20 +112,24 @@ def output_transform_factory(dropout_rates, joint_axes_aug: bool):
             "seg4_3Seg": draw(1 - dropout_rates["seg4_3Seg"][1]),
         }
         if two_dof is not None:
-            set_to_one = np.logical_and(
+            both_ja_zero = np.logical_and(
                 np.logical_and(two_dof[:, None, None], fcs["seg3_3Seg"] == 0.0),
                 fcs["seg4_3Seg"] == 0,
             )
+
             fcs["seg3_3Seg"] = np.where(
-                set_to_one, np.ones((bs, 1, 1)), fcs["seg3_3Seg"]
+                both_ja_zero, np.ones((bs, 1, 1)), fcs["seg3_3Seg"]
             )
             fcs["seg4_3Seg"] = np.where(
-                set_to_one, np.ones((bs, 1, 1)), fcs["seg4_3Seg"]
+                both_ja_zero, np.ones((bs, 1, 1)), fcs["seg4_3Seg"]
             )
 
         for segments, (imu_rate, jointaxes_rate) in dropout_rates.items():
             factor_imu = draw(1 - imu_rate)
             factor_ja = draw(1 - jointaxes_rate)
+
+            if segments == "seg3_3Seg":
+                factor_imu = 0.0
 
             if segments in fcs:
                 factor_ja = fcs[segments]
