@@ -1,3 +1,4 @@
+from dataclasses import replace
 from functools import reduce
 import os
 from pathlib import Path
@@ -45,14 +46,60 @@ def setup_fn_2DOF_factory(prob: float | None):
     return setup_fn_2DOF
 
 
-def finalize_fn_factory(prob: float | None):
-    def finalize_fn(key, q, x, sys):
+def finalize_fn_factory(prob: float | None, rand_sampling_rates: bool):
+    def finalize_fn(key, q, x, sys: x_xy.System):
         X, y = {}, {}
-        pos_i = sys.links.transform1.pos[_l_idx_3Seg_last_seg(sys)]
-        X["2DOF"] = jnp.allclose(pos_i, jnp.zeros((3,)))
+
+        if prob is not None:
+            pos_i = sys.links.transform1.pos[_l_idx_3Seg_last_seg(sys)]
+            X["2DOF"] = jnp.allclose(pos_i, jnp.zeros((3,)))
+
+        if rand_sampling_rates:
+            N = q.shape[0]
+            dt_float32 = jnp.array([[sys.dt]], dtype=jnp.float32)
+            repeated_dt = jnp.repeat(dt_float32, N, axis=0)
+            for name in sys.findall_segments():
+                X[name] = dict(dt=repeated_dt)
+
         return X, y
 
-    return None if prob is None else finalize_fn
+    return finalize_fn
+
+
+def _replace_all_rr_imp(sys: x_xy.System, typ: str) -> x_xy.System:
+    link_types = [_typ if _typ != "rr_imp" else typ for _typ in sys.link_types]
+    return sys.replace(link_types=link_types)
+
+
+def _duplicate_systems_and_configs(
+    sys: list[x_xy.System], configs: list[x_xy.RCMG_Config]
+):
+    SAMPLING_RATES = [25, 40, 60, 100, 120, 150, 200]
+    if not ml.on_cluster():
+        SAMPLING_RATES = [100, 120]
+
+    T_global = 60.0
+    rr_imp_config = x_xy.RCMG_Config(dang_max=5.0, t_max=0.4)
+    registered_rr_imp = []
+
+    sys_out, configs_out = [], []
+    for _sys in sys:
+        for _config in configs:
+            for hz in SAMPLING_RATES:
+                dt = 1 / hz
+                T = (T_global / _sys.dt) * dt
+
+                rr_imp_name = f"rr_imp_{int(T)}"
+                if rr_imp_name not in registered_rr_imp:
+                    x_xy.setup(
+                        rr_imp_joint_kwargs=dict(
+                            name=rr_imp_name, config_res=replace(rr_imp_config, T=T)
+                        )
+                    )
+                    registered_rr_imp.append(rr_imp_name)
+                sys_out.append(_replace_all_rr_imp(_sys.replace(dt=dt), rr_imp_name))
+                configs_out.append(replace(_config, T=T))
+    return sys_out, configs_out, registered_rr_imp
 
 
 def main(
@@ -65,6 +112,7 @@ def main(
     all_rigid_or_flex: bool = False,
     prob_2DOF: float = None,
     seed: int = 1,
+    rand_sampling_rates: bool = False,
 ):
     ENV_VAR = "HPCVAULT" if vault else "WORK"
 
@@ -75,6 +123,7 @@ def main(
         f"noisy_{int(not non)}_prob_rigid_{str(prob_rigid).replace('.', '')}"
         f"pmm_{str(pos_min_max).replace('.', '')}_allRoF_{int(all_rigid_or_flex)}"
         f"_2DOF_{str(prob_2DOF).replace('.', '')}_seed_{seed}"
+        f"_randRates_{int(rand_sampling_rates)}"
     )
 
     configs = [ml.convenient.load_config(name) for name in configs]
@@ -99,6 +148,14 @@ def main(
                     )
                 )
 
+    zip_sys_config = False
+    registered_rr_imp = []
+    if rand_sampling_rates:
+        sys_data, configs, registered_rr_imp = _duplicate_systems_and_configs(
+            sys_data, configs
+        )
+        zip_sys_config = True
+
     x_xy.build_generator(
         sys_data,
         configs,
@@ -109,6 +166,12 @@ def main(
         add_y_relpose=True,
         add_y_rootincl=True,
         dynamic_simulation=True,
+        dynamic_simulation_kwargs=dict(
+            custom_P_gains={
+                typ: x_xy.algorithms.generator.transforms._P_gains["rr_imp"]
+                for typ in registered_rr_imp
+            }
+        ),
         imu_motion_artifacts=True,
         imu_motion_artifacts_kwargs=dict(
             prob_rigid=prob_rigid,
@@ -124,8 +187,9 @@ def main(
         sizes=size,
         seed=seed,
         setup_fn=setup_fn_2DOF_factory(prob_2DOF),
-        finalize_fn=finalize_fn_factory(prob_2DOF),
+        finalize_fn=finalize_fn_factory(prob_2DOF, rand_sampling_rates),
         jit=ml.on_cluster(),
+        zip_sys_config=zip_sys_config,
     )
 
 

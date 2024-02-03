@@ -174,7 +174,7 @@ def _make_rnno_fn(
 
 
 THREE_SEG_CBS = False
-SADDLE_CBS = True
+SADDLE_CBS = False
 
 
 def main(
@@ -197,6 +197,7 @@ def main(
     ja_aug: bool = False,
     checkpoint: str = None,
     kill_after_hours: float = None,
+    rand_sampling_rates: bool = False,
 ):
     assert tp is not None
 
@@ -240,6 +241,7 @@ def main(
                     phase,
                     rootincl=True,
                     X_transform=natural_units_X_trafo,
+                    dt=rand_sampling_rates,
                 )
                 add_callback(cb, sys)
 
@@ -263,6 +265,7 @@ def main(
                     rootincl=True,
                     flex=flex,
                     X_transform=natural_units_X_trafo,
+                    dt=rand_sampling_rates,
                 )
                 add_callback(cb, sys, twice=True)
 
@@ -282,6 +285,7 @@ def main(
                 rootincl=True,
                 flex=False,
                 X_transform=natural_units_X_trafo,
+                dt=rand_sampling_rates,
             )
             add_callback(cb, sys)
 
@@ -320,6 +324,7 @@ def main(
                         flex=True,
                         rootincl=True,
                         X_transform=natural_units_X_trafo,
+                        dt=rand_sampling_rates,
                     )
                     add_callback(cb, sys)
 
@@ -375,9 +380,9 @@ def main(
         network,
         optimizer=optimizer,
         callbacks=callbacks,
-        callback_kill_after_seconds=23.5 * 3600
-        if kill_after_hours is None
-        else kill_after_hours * 3600,
+        callback_kill_after_seconds=(
+            23.5 * 3600 if kill_after_hours is None else kill_after_hours * 3600
+        ),
         callback_kill_if_nan=True,
         callback_kill_if_grads_larger=1e32,
         callback_save_params=f"~/params/{ml.unique_id()}.pickle",
@@ -385,9 +390,9 @@ def main(
         callback_save_params_track_metrices=[["exp_val_mae_deg"]],
         initial_params=None if warmstart is None else f"~/params/0x{warmstart}.pickle",
         key_network=jax.random.PRNGKey(seed),
-        checkpoint=None
-        if checkpoint is None
-        else f"~/.xxy_checkpoints/0x{checkpoint}.pickle",
+        checkpoint=(
+            None if checkpoint is None else f"~/.xxy_checkpoints/0x{checkpoint}.pickle"
+        ),
     )
 
 
