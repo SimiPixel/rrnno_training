@@ -74,7 +74,7 @@ def _replace_all_rr_imp(sys: x_xy.System, typ: str) -> x_xy.System:
 def _duplicate_systems_and_configs(
     sys: list[x_xy.System], configs: list[x_xy.RCMG_Config]
 ):
-    SAMPLING_RATES = [25, 40, 60, 100, 120, 150, 200]
+    SAMPLING_RATES = [25, 40, 60, 100, 120, 150, 200, 240]
     if not ml.on_cluster():
         SAMPLING_RATES = [100, 120]
 
