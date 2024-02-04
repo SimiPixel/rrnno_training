@@ -198,6 +198,7 @@ def main(
     checkpoint: str = None,
     kill_after_hours: float = None,
     rand_sampling_rates: bool = False,
+    reduce_train_by: int = 0,
 ):
     assert tp is not None
 
@@ -358,6 +359,7 @@ def main(
         transform_gen=transforms.GeneratorTrafoLambda(
             output_transform_factory(dropout_configs[dropout_config], ja_aug)
         ),
+        reduce_train_by=reduce_train_by,
     )
 
     callbacks += [
