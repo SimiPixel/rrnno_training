@@ -16,6 +16,14 @@ from x_xy.subpkgs.ml.ml_utils import Logger
 natural_units_X_trafo = ml.convenient.rescale_natural_units_X_transform
 
 
+def _delete_dt(tree):
+    X, y = tree
+    for name in X:
+        dt = X[name].pop("dt")
+    X["dt"] = dt[:, 0]
+    return X, y
+
+
 class SaddleCallback(ml.callbacks.TrainingLoopCallback):
     def __init__(self, rnno_fn, ja_i: list[float], ja_o) -> None:
         filter = ml.InitApplyFnFilter(rnno_fn, X_transform=natural_units_X_trafo)
@@ -100,11 +108,17 @@ def output_transform_factory(dropout_rates, joint_axes_aug: bool):
     def output_transform(tree):
         X, y = tree
         X = X.copy()
+
         two_dof = X.pop("2DOF", None)
         X.pop("pos", None)
+        dt = X.pop("dt", None)
+
         any_segment = X[list(X.keys())[0]]
         assert any_segment["gyr"].ndim == 3, f"{any_segment['gyr'].shape}"
-        bs = any_segment["gyr"].shape[0]
+        bs, N, _ = any_segment["gyr"].shape
+
+        if dt is not None:
+            dt = np.repeat(dt[:, None, :], N, axis=1)
 
         draw = lambda p: np.random.binomial(1, p, size=bs).astype(float)[:, None, None]
         fcs = {
@@ -145,6 +159,9 @@ def output_transform_factory(dropout_rates, joint_axes_aug: bool):
                     X[segments]["joint_axes"] *= np.random.choice([-1.0, 1.0], size=bs)[
                         :, None, None
                     ]
+
+            if dt is not None:
+                X[segments]["dt"] = dt
 
         return natural_units_X_trafo(X), y
 
@@ -359,7 +376,7 @@ def main(
         transform_gen=transforms.GeneratorTrafoLambda(
             output_transform_factory(dropout_configs[dropout_config], ja_aug)
         ),
-        reduce_train_by=reduce_train_by,
+        tree_transform=_delete_dt,
     )
 
     callbacks += [
