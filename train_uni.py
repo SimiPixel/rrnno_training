@@ -186,6 +186,7 @@ def main(
     checkpoint: str = None,
     kill_after_hours: float = None,
     rand_sampling_rates: bool = False,
+    cos_decay_twice: bool = False,
 ):
     assert tp is not None
 
@@ -359,7 +360,7 @@ def main(
         episodes,
         n_steps_per_episode=6,
         skip_large_update_max_normsq=100.0,
-        cos_decay_twice=(episodes > 5000),
+        cos_decay_twice=cos_decay_twice,
     )
 
     ml.train(
