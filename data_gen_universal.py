@@ -134,6 +134,7 @@ def main(
     prob_2DOF: float = None,
     seed: int = 1,
     rand_sampling_rates: bool = False,
+    dry_run: bool = False,
 ):
     ENV_VAR = "HPCVAULT" if vault else "WORK"
 
@@ -154,7 +155,7 @@ def main(
     anchors_3Seg = ["seg2", "seg4"]
     anchors_4Seg = ["seg5", "seg2", "seg3", "seg4"]
 
-    if not ml.on_cluster():
+    if not ml.on_cluster() or dry_run:
         anchors_2Seg = anchors_2Seg[:1]
         anchors_3Seg = anchors_3Seg[:1]
         anchors_4Seg = anchors_4Seg[:1]
