@@ -6,6 +6,8 @@ from pathlib import Path
 import fire
 import jax
 import jax.numpy as jnp
+import numpy as np
+import tree_utils
 import x_xy
 from x_xy.subpkgs import ml
 
@@ -55,32 +57,22 @@ def finalize_fn_factory(prob: float | None, rand_sampling_rates: bool):
             X["2DOF"] = jnp.allclose(pos_i, jnp.zeros((3,)))
 
         if rand_sampling_rates:
-            N = q.shape[0]
-            dt_float32 = jnp.array([[sys.dt]], dtype=jnp.float32)
-            repeated_dt = jnp.repeat(dt_float32, N, axis=0)
-            for name in sys.findall_segments():
-                X[name] = dict(dt=repeated_dt)
+            X["dt"] = jnp.array([sys.dt], dtype=jnp.float32)
 
         return X, y
 
     return finalize_fn
 
 
-def _replace_all_rr_imp(sys: x_xy.System, typ: str) -> x_xy.System:
-    link_types = [_typ if _typ != "rr_imp" else typ for _typ in sys.link_types]
-    return sys.replace(link_types=link_types)
+T_global = 60.0
 
 
 def _duplicate_systems_and_configs(
     sys: list[x_xy.System], configs: list[x_xy.RCMG_Config]
 ):
-    SAMPLING_RATES = [25, 40, 60, 100, 120, 150, 200, 240]
+    SAMPLING_RATES = [40, 60, 80, 100, 120, 140, 160, 180, 200]
     if not ml.on_cluster():
-        SAMPLING_RATES = [100, 120]
-
-    T_global = 60.0
-    rr_imp_config = x_xy.RCMG_Config(dang_max=5.0, t_max=0.4)
-    registered_rr_imp = []
+        SAMPLING_RATES = SAMPLING_RATES
 
     sys_out, configs_out = [], []
     for _sys in sys:
@@ -89,17 +81,46 @@ def _duplicate_systems_and_configs(
                 dt = 1 / hz
                 T = (T_global / _sys.dt) * dt
 
-                rr_imp_name = f"rr_imp_{int(T)}"
-                if rr_imp_name not in registered_rr_imp:
-                    x_xy.setup(
-                        rr_imp_joint_kwargs=dict(
-                            name=rr_imp_name, config_res=replace(rr_imp_config, T=T)
-                        )
-                    )
-                    registered_rr_imp.append(rr_imp_name)
-                sys_out.append(_replace_all_rr_imp(_sys.replace(dt=dt), rr_imp_name))
+                sys_out.append(_sys.replace(dt=dt))
                 configs_out.append(replace(_config, T=T))
-    return sys_out, configs_out, registered_rr_imp
+    return sys_out, configs_out
+
+
+def _crop_expand_seqs(
+    seqs: list[tree_utils.PyTree[np.ndarray]], T: int, verbose: bool = False
+):
+
+    def tree_map(f, tree):
+        def _f(arr):
+            if arr.ndim == 1:
+                return arr
+            else:
+                return f(arr)
+
+        return jax.tree_map(_f, tree)
+
+    unified_seqs = []
+    printed = []
+    for seq in seqs:
+        N = tree_utils.tree_shape(seq[1])
+        dt = round(seq[0]["dt"][0], 6)
+
+        if verbose and dt not in printed:
+            print(f"dt={dt}; N={N}")
+            printed.append(dt)
+
+        if N < T:
+            # padd at the end
+            f_modify = lambda arr: np.pad(arr, ((0, T - N), (0, 0)), mode="edge")
+        elif N > T:
+            # crop at the end
+            f_modify = lambda arr: arr[: -(N - T)]
+        else:
+            f_modify = lambda arr: arr
+
+        unified_seqs.append(tree_map(f_modify, seq))
+
+    return unified_seqs
 
 
 def main(
@@ -149,11 +170,8 @@ def main(
                 )
 
     zip_sys_config = False
-    registered_rr_imp = []
     if rand_sampling_rates:
-        sys_data, configs, registered_rr_imp = _duplicate_systems_and_configs(
-            sys_data, configs
-        )
+        sys_data, configs = _duplicate_systems_and_configs(sys_data, configs)
         zip_sys_config = True
 
     x_xy.build_generator(
@@ -163,15 +181,10 @@ def main(
         add_X_imus=True,
         add_X_imus_kwargs=dict(noisy=not non),
         add_X_jointaxes=True,
+        add_X_jointaxes_kwargs=dict(randomly_flip=True),
         add_y_relpose=True,
         add_y_rootincl=True,
         dynamic_simulation=True,
-        dynamic_simulation_kwargs=dict(
-            custom_P_gains={
-                typ: x_xy.algorithms.generator.transforms._P_gains["rr_imp"]
-                for typ in registered_rr_imp
-            }
-        ),
         imu_motion_artifacts=True,
         imu_motion_artifacts_kwargs=dict(
             prob_rigid=prob_rigid,

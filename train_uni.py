@@ -5,7 +5,6 @@ import fire
 import jax
 import numpy as np
 from tree_utils._tree_utils import PyTree
-import wandb
 import x_xy
 from x_xy.algorithms.generator import transforms
 from x_xy.subpkgs import benchmark
@@ -13,19 +12,13 @@ from x_xy.subpkgs import ml
 from x_xy.subpkgs import sys_composer
 from x_xy.subpkgs.ml.ml_utils import Logger
 
+import wandb
+
 natural_units_X_trafo = ml.convenient.rescale_natural_units_X_transform
 
 
-def _delete_dt(tree):
-    X, y = tree
-    for name in X:
-        dt = X[name].pop("dt")
-    X["dt"] = dt[:, 0]
-    return X, y
-
-
 class SaddleCallback(ml.callbacks.TrainingLoopCallback):
-    def __init__(self, rnno_fn, ja_i: list[float], ja_o) -> None:
+    def __init__(self, rnno_fn, ja_i: list[float], ja_o, dt) -> None:
         filter = ml.InitApplyFnFilter(rnno_fn, X_transform=natural_units_X_trafo)
         self.predict = jax.jit(
             benchmark.saddle(
@@ -38,6 +31,7 @@ class SaddleCallback(ml.callbacks.TrainingLoopCallback):
                 factory=True,
                 ja_inner=ja_i,
                 ja_outer=ja_o,
+                dt=dt,
             )
         )
 
@@ -79,29 +73,7 @@ dropout_rates1 = dict(
     seg3_4Seg=(3 / 4, 1 / 4),
     seg4_4Seg=(0.0, 1 / 4),
 )
-dropout_rates2 = dict(
-    seg2_2Seg=(0.0, 1.0),
-    seg3_2Seg=(0.0, 0.0),
-    seg2_3Seg=(0.0, 1.0),
-    seg3_3Seg=(1.0, 0.0),
-    seg4_3Seg=(0.0, 0.0),
-    seg5_4Seg=(0.0, 1.0),
-    seg2_4Seg=(1.0, 0.0),
-    seg3_4Seg=(1.0, 0.0),
-    seg4_4Seg=(0.0, 0.0),
-)
-dropout_rates3 = dict(
-    seg2_2Seg=(0.0, 1.0),
-    seg3_2Seg=(0.0, 2 / 3),
-    seg2_3Seg=(0.0, 1.0),
-    seg3_3Seg=(2 / 3, 2 / 3),
-    seg4_3Seg=(0.0, 2 / 3),
-    seg5_4Seg=(0.0, 1.0),
-    seg2_4Seg=(3 / 4, 0.0),
-    seg3_4Seg=(3 / 4, 0.0),
-    seg4_4Seg=(0.0, 0.0),
-)
-dropout_configs = {1: dropout_rates1, 2: dropout_rates2, 3: dropout_rates3}
+dropout_configs = {1: dropout_rates1}
 
 
 def output_transform_factory(dropout_rates, joint_axes_aug: bool):
@@ -110,7 +82,6 @@ def output_transform_factory(dropout_rates, joint_axes_aug: bool):
         X = X.copy()
 
         two_dof = X.pop("2DOF", None)
-        X.pop("pos", None)
         dt = X.pop("dt", None)
 
         any_segment = X[list(X.keys())[0]]
@@ -191,7 +162,7 @@ def _make_rnno_fn(
 
 
 THREE_SEG_CBS = False
-SADDLE_CBS = False
+SADDLE_CBS = True
 
 
 def main(
@@ -215,7 +186,6 @@ def main(
     checkpoint: str = None,
     kill_after_hours: float = None,
     rand_sampling_rates: bool = False,
-    reduce_train_by: int = 0,
 ):
     assert tp is not None
 
@@ -350,11 +320,11 @@ def main(
 
     if SADDLE_CBS:
         callbacks += [
-            SaddleCallback(rnno_fn, [0, 0, -1.0], [0, 1.0, 0]),
-            SaddleCallback(rnno_fn, [0, 0, 1.0], [0, 0, 0.0]),
-            SaddleCallback(rnno_fn, [0, 1, 0.0], [0, 0, 0.0]),
-            SaddleCallback(rnno_fn, [0, 0, 0], [0, 1, 0]),
-            SaddleCallback(rnno_fn, [0, 0, 0], [0, 0, -1]),
+            SaddleCallback(rnno_fn, [0, 1.0, 0], [0, 0, 1.0], rand_sampling_rates),
+            SaddleCallback(rnno_fn, [0, 0, 1.0], [0, 1.0, 0], rand_sampling_rates),
+            SaddleCallback(rnno_fn, [0, 1.0, 0], [0, 0, 0.0], rand_sampling_rates),
+            SaddleCallback(rnno_fn, [0, 0, 1.0], [0, 0, 0.0], rand_sampling_rates),
+            SaddleCallback(rnno_fn, [0, 0, 0.0], [0, 0, 0.0], rand_sampling_rates),
         ]
 
     # create one large "experimental validation" metric
@@ -376,7 +346,6 @@ def main(
         transform_gen=transforms.GeneratorTrafoLambda(
             output_transform_factory(dropout_configs[dropout_config], ja_aug)
         ),
-        tree_transform=_delete_dt,
     )
 
     callbacks += [
