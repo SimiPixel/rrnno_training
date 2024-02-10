@@ -63,15 +63,38 @@ def output_transform_factory(factor_ja_overwrite: float | None):
 
 def rnno_fn_factory(rnno: bool):
     def rnno_fn(sys):
+        link_output_normalize = True
+        link_output_dim = 4
+        link_output_transform = None
+        _sys = sys
+
         if rnno:
-            sys = None
+            link_output_normalize = False
+            link_output_dim = 4 * len(sys.findall_segments())
+
+            def link_output_transform(y):  # noqa: F811
+                assert y.shape == (link_output_dim,)
+
+                out = dict()
+                i = 0
+                for name in sys.link_names:
+                    j = i + 4
+                    out[name] = x_xy.maths.safe_normalize(y[i:j])
+                    i += 4
+                return out
+
+            _sys = None
+
         return ml.make_rnno(
-            sys,
+            _sys,
             400 if ml.on_cluster() else 25,
             200 if ml.on_cluster() else 10,
             stack_rnn_cells=2,
             layernorm=True,
             keep_toRoot_output=True,
+            link_output_dim=link_output_dim,
+            link_output_normalize=link_output_normalize,
+            link_output_transform=link_output_transform,
         )
 
     return rnno_fn
