@@ -61,41 +61,58 @@ def output_transform_factory(factor_ja_overwrite: float | None):
     return output_transform
 
 
-def rnno_fn_factory(rnno: bool):
-    def rnno_fn(sys):
-        link_output_normalize = True
-        link_output_dim = 4
-        link_output_transform = None
-        _sys = sys
+def rnno_fn_factory(rnno_v1: bool, rnno_v2: bool):
+    assert not (rnno_v1 and rnno_v2)
 
-        if rnno:
-            link_output_normalize = False
-            link_output_dim = 4 * len(sys.findall_segments())
+    if rnno_v1:
 
-            def link_output_transform(y):  # noqa: F811
-                assert y.shape == (link_output_dim,)
+        def rnno_fn(sys: x_xy.System):
+            complexity = "complex" if ml.on_cluster() else "tiny"
+            return ml.model_wrapper_indices_to_names(
+                ml.make_rnno_v1(
+                    sys.link_parents,
+                    keep_toRoot_output=True,
+                    **ml.complexities_rnno_v1[complexity],
+                ),
+                sys.link_names,
+            )
 
-                out = dict()
-                i = 0
-                for name in sys.link_names:
-                    j = i + 4
-                    out[name] = x_xy.maths.safe_normalize(y[i:j])
-                    i += 4
-                return out
+    else:
 
-            _sys = None
+        def rnno_fn(sys):
+            link_output_normalize = True
+            link_output_dim = 4
+            link_output_transform = None
+            _sys = sys
 
-        return ml.make_rnno(
-            _sys,
-            400 if ml.on_cluster() else 25,
-            200 if ml.on_cluster() else 10,
-            stack_rnn_cells=2,
-            layernorm=True,
-            keep_toRoot_output=True,
-            link_output_dim=link_output_dim,
-            link_output_normalize=link_output_normalize,
-            link_output_transform=link_output_transform,
-        )
+            if rnno_v2:
+                link_output_normalize = False
+                link_output_dim = 4 * len(sys.findall_segments())
+
+                def link_output_transform(y):  # noqa: F811
+                    assert y.shape == (link_output_dim,)
+
+                    out = dict()
+                    i = 0
+                    for name in sys.link_names:
+                        j = i + 4
+                        out[name] = x_xy.maths.safe_normalize(y[i:j])
+                        i += 4
+                    return out
+
+                _sys = None
+
+            return ml.make_rnno(
+                _sys,
+                400 if ml.on_cluster() else 25,
+                200 if ml.on_cluster() else 10,
+                stack_rnn_cells=2,
+                layernorm=True,
+                keep_toRoot_output=True,
+                link_output_dim=link_output_dim,
+                link_output_normalize=link_output_normalize,
+                link_output_transform=link_output_transform,
+            )
 
     return rnno_fn
 
@@ -115,7 +132,8 @@ def main(
     checkpoint: str = None,
     kill_after_hours: float = None,
     rand_sampling_rates: bool = False,
-    rnno: bool = False,
+    rnno_v1: bool = False,
+    rnno_v2: bool = False,
     known_ja: bool = False,
 ):
     assert tp is not None
@@ -129,7 +147,7 @@ def main(
     if use_wandb:
         wandb.init(project=wandb_project, name=wandb_name, config=locals())
 
-    rnno_fn = rnno_fn_factory(rnno)
+    rnno_fn = rnno_fn_factory(rnno_v1, rnno_v2)
 
     callbacks, metrices_name = [], []
 
@@ -163,7 +181,7 @@ def main(
                     X_transform=natural_units_X_trafo,
                     dt=rand_sampling_rates,
                 )
-                if rnno:
+                if rnno_v1 or rnno_v2:
                     if not flex:
                         if known_ja and ja:
                             add_callback(cb, sys)

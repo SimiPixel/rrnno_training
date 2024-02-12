@@ -62,6 +62,7 @@ def main(
     filepath = root.joinpath(
         f"uni_{size}{reduce(lambda a,b: a+'_'+b, configs, '')}_seed{seed}_randHz"
         f"_{int(rand_sampling_rates)}_2Seg_{int(two_seg)}_3Seg_{int(three_seg)}"
+        f"_flex_{int(flex)}"
     )
 
     configs = [ml.convenient.load_config(name) for name in configs]
