@@ -61,7 +61,8 @@ def output_transform_factory(factor_ja_overwrite: float | None):
     return output_transform
 
 
-def rnno_fn_factory(rnno_v1: bool, rnno_v2: bool):
+def rnno_fn_factory(rnno_v1: bool):
+    rnno_v2 = False
     assert not (rnno_v1 and rnno_v2)
 
     if rnno_v1:
@@ -131,10 +132,7 @@ def main(
     kill_ep: Optional[int] = None,
     checkpoint: str = None,
     kill_after_hours: float = None,
-    rand_sampling_rates: bool = False,
     rnno_v1: bool = False,
-    rnno_v2: bool = False,
-    known_ja: bool = False,
 ):
     assert tp is not None
 
@@ -147,7 +145,7 @@ def main(
     if use_wandb:
         wandb.init(project=wandb_project, name=wandb_name, config=locals())
 
-    rnno_fn = rnno_fn_factory(rnno_v1, rnno_v2)
+    rnno_fn = rnno_fn_factory(rnno_v1)
 
     callbacks, metrices_name = [], []
 
@@ -167,6 +165,13 @@ def main(
         "S_06": ["slow1", "fast"],
         "S_07": ["slow_fast_mix", "slow_fast_freeze_mix"],
     }
+
+    def exp_val_cb_transform(X):
+        if rnno_v1:
+            for seg in X:
+                X[seg].pop("joint_axes", None)
+        return natural_units_X_trafo(X)
+
     for phase in timings[exp_id]:
         for flex in [False, True]:
             for ja in [False, True]:
@@ -178,15 +183,11 @@ def main(
                     jointaxes=ja,
                     rootincl=True,
                     flex=flex,
-                    X_transform=natural_units_X_trafo,
-                    dt=rand_sampling_rates,
+                    X_transform=exp_val_cb_transform,
+                    dt=not rnno_v1,
                 )
-                if rnno_v1 or rnno_v2:
-                    if not flex:
-                        if known_ja and ja:
-                            add_callback(cb, sys)
-                        else:
-                            add_callback(cb, sys)
+                if rnno_v1 and not flex and ja:
+                    add_callback(cb, sys)
                 else:
                     add_callback(cb, sys)
 
@@ -206,9 +207,7 @@ def main(
     generator, (X_val, y_val) = ml.convenient.train_val_split(
         tp,
         bs,
-        transform_gen=transforms.GeneratorTrafoLambda(
-            output_transform_factory(1.0 if known_ja else None)
-        ),
+        transform_gen=transforms.GeneratorTrafoLambda(output_transform_factory(None)),
     )
 
     callbacks += [

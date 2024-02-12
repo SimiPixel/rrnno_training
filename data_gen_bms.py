@@ -51,18 +51,20 @@ def main(
     seed: int = 1,
     two_seg: bool = False,
     three_seg: bool = True,
+    three_seg_jointaxes: str = None,
     rand_sampling_rates: bool = False,
 ):
     ENV_VAR = "HPCVAULT" if vault else "WORK"
 
     pos_min_max: float = 0.05
+    add_X_jointaxes = True
 
     root = Path(os.environ.get(ENV_VAR, "")).joinpath("xxy_data")
     root.mkdir(exist_ok=True)
     filepath = root.joinpath(
         f"uni_{size}{reduce(lambda a,b: a+'_'+b, configs, '')}_seed{seed}_randHz"
         f"_{int(rand_sampling_rates)}_2Seg_{int(two_seg)}_3Seg_{int(three_seg)}"
-        f"_flex_{int(flex)}"
+        f"_flex_{int(flex)}_3SegJAs_{three_seg_jointaxes}"
     )
 
     configs = [ml.convenient.load_config(name) for name in configs]
@@ -72,6 +74,11 @@ def main(
         anchors_2Seg = ["seg2", "seg3"]
     if three_seg:
         anchors_3Seg = ["seg2", "seg4"]
+        if three_seg_jointaxes == "yz":
+            use_rr_imp = False
+            add_X_jointaxes = False
+        else:
+            raise Exception("xy jointaxes for 3Seg is not implemented")
 
     if not ml.on_cluster():
         anchors_2Seg = anchors_2Seg[:1]
@@ -82,7 +89,12 @@ def main(
         for a3S in anchors_3Seg:
             sys_data.append(
                 ml.convenient.load_1Seg2Seg3Seg4Seg_system(
-                    None, a2S, a3S, None, True, add_suffix_to_linknames=True
+                    None,
+                    a2S,
+                    a3S,
+                    None,
+                    use_rr_imp=use_rr_imp,
+                    add_suffix_to_linknames=True,
                 )
             )
 
@@ -96,7 +108,7 @@ def main(
         configs,
         sys_ml=sys_data[0],
         add_X_imus=True,
-        add_X_jointaxes=True,
+        add_X_jointaxes=add_X_jointaxes,
         add_X_jointaxes_kwargs=dict(randomly_flip=True),
         add_y_relpose=True,
         add_y_rootincl=True,
