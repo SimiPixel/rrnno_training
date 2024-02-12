@@ -70,6 +70,7 @@ def main(
     configs = [ml.convenient.load_config(name) for name in configs]
 
     anchors_2Seg = anchors_3Seg = [None]
+    replace_joints = False
     if two_seg:
         anchors_2Seg = ["seg2", "seg3"]
     if three_seg:
@@ -77,24 +78,38 @@ def main(
         if three_seg_jointaxes == "yz":
             use_rr_imp = False
             add_X_jointaxes = False
+        elif three_seg_jointaxes == "xy":
+            use_rr_imp = False
+            add_X_jointaxes = False
+            replace_joints = True
         else:
-            raise Exception("xy jointaxes for 3Seg is not implemented")
+            raise Exception(f"Not valid value for jointaxes {three_seg_jointaxes}")
 
     if not ml.on_cluster():
         anchors_2Seg = anchors_2Seg[:1]
         anchors_3Seg = anchors_3Seg[:1]
 
+    def replace_yz_by_xy(sys: x_xy.System):
+        if not replace_joints:
+            return sys
+        for joint_type, new_joint_type in zip(["ry", "rz"], ["rx", "ry"]):
+            name = sys.findall_bodies_with_jointtype(joint_type, names=True)[0]
+            sys = sys.change_joint_type(name, new_joint_type)
+        return sys
+
     sys_data = []
     for a2S in anchors_2Seg:
         for a3S in anchors_3Seg:
             sys_data.append(
-                ml.convenient.load_1Seg2Seg3Seg4Seg_system(
-                    None,
-                    a2S,
-                    a3S,
-                    None,
-                    use_rr_imp=use_rr_imp,
-                    add_suffix_to_linknames=True,
+                replace_yz_by_xy(
+                    ml.convenient.load_1Seg2Seg3Seg4Seg_system(
+                        None,
+                        a2S,
+                        a3S,
+                        None,
+                        use_rr_imp=use_rr_imp,
+                        add_suffix_to_linknames=True,
+                    )
                 )
             )
 
