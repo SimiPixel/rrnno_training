@@ -43,6 +43,7 @@ def main(
     if not x_xy.ml.on_cluster() or dry_run:
         anchors = anchors[:1]
         sampling_rates = [80, 100]
+        size = 8
 
     x_xy.RCMG(
         x_xy.io.load_example("exclude/standard_sys_rr_imp"),
