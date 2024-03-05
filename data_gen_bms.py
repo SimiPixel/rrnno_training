@@ -6,7 +6,7 @@ from pathlib import Path
 import fire
 import jax.numpy as jnp
 import x_xy
-from x_xy.subpkgs import ml
+from x_xy import ml
 
 
 def finalize_fn_factory(rand_sampling_rates: bool):
