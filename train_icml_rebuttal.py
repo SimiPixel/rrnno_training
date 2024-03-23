@@ -17,7 +17,7 @@ dropout_rates = dict(
     seg2_2Seg=(0.0, 1.0),
     seg3_2Seg=(0.0, 0.5),
     seg2_3Seg=(0.0, 1.0),
-    seg3_3Seg=(2 / 3, 0.5),
+    seg3_3Seg=(0.9, 0.5),
     seg4_3Seg=(0.0, 0.5),
     seg5_4Seg=(0.0, 1.0),
     seg2_4Seg=(3 / 4, 1 / 4),
@@ -26,20 +26,24 @@ dropout_rates = dict(
 )
 
 
-def output_transform_factory(link_names):
+def output_transform_factory(link_names: list[str]):
 
     def _rename_links(d: dict[str, dict]):
         for key in list(d.keys()):
             if key in link_names:
                 d[str(link_names.index(key))] = d.pop(key)
+            else:
+                assert key == "dt", f"{key} not in {link_names}"
 
     def output_transform(tree):
         X, y = tree
-        segments = list(set(X.keys()) - set(["dt"]))
 
-        any_segment = X[segments[0]]
-        assert any_segment["gyr"].ndim == 3, f"{any_segment['gyr'].shape}"
-        B = any_segment["gyr"].shape[0]
+        for key in list(X.keys()):
+            if key != "dt" and key not in link_names:
+                X.pop(key)
+                y.pop(key)
+
+        B = X[link_names[0]]["gyr"].shape[0]
 
         draw = lambda p: np.random.binomial(1, p, size=B).astype(float)[:, None, None]
         fcs = {
@@ -47,22 +51,20 @@ def output_transform_factory(link_names):
             "seg4_3Seg": draw(1 - dropout_rates["seg4_3Seg"][1]),
         }
 
-        for segments, (imu_rate, jointaxes_rate) in dropout_rates.items():
+        for name in link_names:
+            imu_rate, jointaxes_rate = dropout_rates[name]
             factor_imu = draw(1 - imu_rate)
             factor_ja = draw(1 - jointaxes_rate)
 
-            if segments == "seg3_3Seg":
-                factor_imu = 0.0
-
-            if segments in fcs:
-                factor_ja = fcs[segments]
+            if name in fcs:
+                factor_ja = fcs[name]
 
             for gyraccmag in ["gyr", "acc", "mag"]:
-                if gyraccmag in X[segments]:
-                    X[segments][gyraccmag] *= factor_imu
+                if gyraccmag in X[name]:
+                    X[name][gyraccmag] *= factor_imu
 
-            if "joint_axes" in X[segments]:
-                X[segments]["joint_axes"] *= factor_ja
+            if "joint_axes" in X[name]:
+                X[name]["joint_axes"] *= factor_ja
 
         _rename_links(X)
         _rename_links(y)
